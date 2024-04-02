@@ -1,0 +1,46 @@
+<launch>
+
+    <param name="/use_sim_time" value="false" />
+    <arg name="rows" default="7" />
+    <arg name="cols" default="4" />
+    <arg name="image_width" default="960" />
+    <arg name="image_height" default="540" />
+    <arg name="max_clouds" default="300" />
+
+    <node pkg="yujin_yrl_v2_package" type="yrl_pub" name="yrl_pub" >
+        <rosparam command="load" file="$(find yujin_yrl_v2_package)/config/params.yaml"/>
+    </node> 
+
+    <node type="point_cloud2_assembler" pkg="laser_assembler" name="my_assembler">
+        <remap from="cloud" to="yrl_pub/yrl_cloud"/>
+        <param name="max_clouds" type="int" value="150" />
+        <param name="fixed_frame" type="string" value="base_link" />
+    </node>
+    
+    <node type="yrl2pc.py" pkg="yrl_to_cloud" name="yrl2pc" output="screen"/>
+
+    <!-- 啟動USB相機 -->
+    <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen">
+        <param name="video_device" value="/dev/video0" />
+        <param name="image_width" value="$(arg image_width)" />
+        <param name="image_height" value="$(arg image_height)" />
+        <param name="pixel_format" value="yuyv" />
+        <param name="camera_frame_id" value="usb_cam" />
+        <param name="io_method" value="mmap"/>
+    </node>
+
+    <!-- 啟動chessboard_detector節點 -->
+    <node name="chessboard_detector" pkg="calibration" type="chessboard_detector.py" output="screen">
+        <param name="rows" value="$(arg rows)" />
+        <param name="cols" value="$(arg cols)" />
+        <param name="show" value="false" />
+    </node>
+
+    <!-- 啟動save_image_and_pcd節點 -->l
+    <node name="capture_image_and_cloud" pkg="calibration" type="capture_image_and_cloud.py" output="screen" launch-prefix="bash -c 'sleep 5; $0 $@'" />
+        <param name="img_save_path" value="$(find calibration)/raw_data/img" />
+        <param name="pcd_save_path" value="$(find calibration)/raw_data/pcd/" />
+ 
+    <!-- 啟動RViz並加載配置文件 -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find calibration)/config/capture_image_and_cloud.rviz" required="true"/>
+</launch>

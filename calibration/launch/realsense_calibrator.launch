@@ -1,0 +1,43 @@
+<launch>
+  <!-- 定義外部輸入的參數 -->
+  <arg name="size" default="7x4"/>
+  <arg name="square" default="0.0485"/>
+  <arg name="image_topic" default="/camera/color/image_raw"/>
+  <arg name="camera_topic" default="/camera"/>
+  <arg name="destination_path" default="$(find calibration)/script/cal_file/cam_cal"/>
+  <arg name="image_width" default="640"/>
+  <arg name="image_height" default="480"/>
+
+  <!-- 啟動USB攝像頭 -->
+    <!-- 啟動 RealSense 相機 -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch" >
+        <!-- 基本參數 -->
+        <arg name="camera" value="camera" /> <!-- 相機名稱 -->
+        <arg name="serial_no" value="" /> <!-- 相機序列號 -->
+        <arg name="usb_port_id" value="" /> <!-- USB 端口ID -->
+        <arg name="device_type" value="" /> <!-- 設備類型 -->
+        
+        <arg name="output" default="log"/> 
+
+        <!-- 圖像流參數 -->
+        <arg name="color_width" value="$(arg image_width)" />
+        <arg name="color_height" value="$(arg image_height)" /> 
+        <arg name="depth_width" value="$(arg image_width)" /> 
+        <arg name="depth_height" value="$(arg image_height)" />
+        <arg name="infra_width" value="$(arg image_width)" /> 
+        <arg name="infra_height" value="$(arg image_height)" /> 
+        <arg name="color_fps" value="15" /> 
+        <arg name="depth_fps" value="15" /> 
+        <arg name="infra_fps" value="15" />
+
+        <!-- 其他影像處理參數 -->
+        <arg name="enable_pointcloud" value="false" /> <!-- 啟用點雲 -->
+        <arg name="align_depth" value="true" /> <!-- 深度對齊 -->
+        <arg name="filters" value="" /> <!-- 使用的過濾器 -->
+    </include>
+
+  <!-- 執行camera_calibration -->
+  <node name="camera_calibration" pkg="camera_calibration" type="cameracalibrator.py"
+        args="--size $(arg size) --square $(arg square) --no-service-check image:=$(arg image_topic) camera:=$(arg camera_topic)">
+  </node>
+</launch>
