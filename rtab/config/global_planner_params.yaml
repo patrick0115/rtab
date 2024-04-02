@@ -1,0 +1,6 @@
+GlobalPlanner:
+  allow_unknown: true
+  use_dijkstra: true
+  planner_window_x: 5.0
+  planner_window_y: 5.0
+  default_tolerance: 0.5
