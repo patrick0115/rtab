@@ -1,0 +1,50 @@
+<launch>
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="run_bag" default="true" />
+    <arg name="run_2dmap_save" default="true" />
+    <arg name="run_lidar_filter" default="true" />
+    <!-- param -->
+     <arg name="map" default="b1" />
+    <arg name="bag_storage_path" default="$(find lidar)/bag/$(arg map)/$(arg map).bag" />    
+    <!-- <arg name="bag_storage_path" default="$(find lidar)/bag/b1/bag_2024-03-15-18-02-49.bag" />     -->
+
+    <arg name="bag_delay" default="1"/> 
+    <arg name="grid_map_save_path" default="$(find rtab)/map/$(arg map)/$(arg map)_hector.pgm" />
+
+    <!-- node -->
+    <node if="$(arg run_bag)"  pkg="rosbag" type="play" name="play_bag" args="--delay  $(arg bag_delay)  -r 0.8 $(arg bag_storage_path)  " output="log"   />
+
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find lidar)/rviz/plan.rviz" required="true" />
+
+    <node if="$(arg run_lidar_filter)"  name="scan_filter" pkg="lidar" type="lidar_filter.py" output="screen">
+        <param name="input_topic" value="/scan"/>
+        <param name="output_topic" value="/filtered_scan"/>
+        <param name="filter_distance" value="1.1"/>
+    </node>
+
+    <node pkg="hector_mapping" type="hector_mapping" name="hector_mapping" output="screen">
+        <param name="base_frame" value="base_link"/>
+        <param name="map_frame"  value="map"/>
+        <param name="scan_topic" value="/filtered_scan" />
+        <param name="pub_map_odom_transform" value="false"/>
+        <param name="map_update_interval" value="5.0"/>
+        <param name="map_resolution" value="0.05"/>
+        <param name="map_size" value="1024"/>
+        <param name="map_start_x" value="0.5"/>
+        <param name="map_start_y" value="0.5"/>
+        <param name="map_multi_res_levels" value="3"/>
+        <param name="update_factor_free" value="0.4"/>
+        <param name="update_factor_occupied" value="0.9"/>
+        <param name="laser_min_dist" value="0.4"/>
+        <param name="laser_max_dist" value="30.0"/>
+        <param name="laser_z_min_value" value="-1.0"/>
+        <param name="laser_z_max_value" value="1.0"/>
+        <param name="use_odometry" value="false"/>
+    </node>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="laser_to_base_link" args="0.3 0 0.27 0 0 0 base_link laser_frame  " />
+    <node if="$(arg run_2dmap_save)" name="save_2d_grid_map" pkg="rtab" type="save_2d_grid_map.py" output="log" >
+        <param name="occupancy_grid_topic" value="/map" />
+        <param name="map_path" value="$(arg grid_map_save_path)"/>        
+    </node>
+</launch>

@@ -1,0 +1,131 @@
+<launch>
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="run_bag" default="true" />    
+    <arg name="run_2d_mapserver" default="true" />
+    <arg name="pub_3d_map" default="true" />
+    <arg name="run_lidar_filter" default="true" />
+    <arg name="run_matcher" default="true" />      
+    <arg name="run_amcl" default="true" />    
+    <arg name="run_move_base" default="true" />
+    
+    <!-- param -->
+    <param name="/use_sim_time" value="true"/>
+    <arg name="map" default="elevator" />
+    <!-- seg , hector normal_vector-->
+    <arg name="mapping_method" default="normal_vector" />
+    <arg name="grid_map" default="$(arg map)_$(arg mapping_method)" />
+
+    <arg name="bag_storage_path" default="$(find lidar)/bag/$(arg map)/$(arg map)_walk.bag" />
+    <arg name="grid_map_path" default="$(find rtab)/map/$(arg map)/$(arg grid_map).yaml" />
+    <arg name="pcd_file_path_of_3d_pcss_map" default="$(find rtab)/map/$(arg map)/$(arg map).pcd"/>
+    <arg name="topic_of_3d_pcss_map" default="/map_3d" />
+
+    <arg name="initial_pose_x" value="$(eval '7' if arg('grid_map') == 'b1_hector' 
+    else ('17.926' if arg('grid_map') == 'b1_seg' 
+    else ('1.05' if arg('grid_map') == 'elevator_hector' 
+    else ('6.066' if arg('grid_map') == 'elevator_seg' 
+    else ('6.066' if arg('grid_map') == 'elevator_normal_vector' 
+    else ('18' if arg('grid_map') == 'b1_normal_vector'
+    else '0'))))))"/>
+    <arg name="initial_pose_y" value="$(eval '-0.8' if arg('grid_map') == 'b1_hector' 
+    else ('0.094' if arg('grid_map') == 'b1_seg' 
+    else ('0.15' if arg('grid_map') == 'elevator_hector' 
+    else ('-9.327' if arg('grid_map') == 'elevator_seg' 
+    else ('-9.327' if arg('grid_map') == 'elevator_normal_vector' 
+    else ('0' if arg('grid_map') == 'b1_normal_vector'
+    else '0'))))))"/>
+    <arg name="initial_pose_a" value="$(eval '0.6' if arg('grid_map') == 'b1_hector' 
+    else ('-0.858' if arg('grid_map') == 'b1_seg' 
+    else ('-0.1' if arg('grid_map') == 'elevator_hector' 
+    else ('1.585' if arg('grid_map') == 'elevator_seg' 
+    else ('1.585' if arg('grid_map') == 'elevator_normal_vector'
+    else ('-1' if arg('grid_map') == 'b1_normal_vector'
+    else '0'))))))"/>
+
+
+
+
+
+    <!-- node -->
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find lidar)/rviz/grid_map_localization.rviz" required="true" />
+    <node if="$(arg run_bag)" pkg="rosbag" type="play" name="play_bag" args="--clock -r 1 -d 1 $(arg bag_storage_path)" output="log"  />
+
+
+    <param name="robot_description" command="$(find xacro)/xacro /home/lab606/rtab/src/rtab/urdf/robot.urdf.xacro" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+
+
+    <node if="$(arg run_2d_mapserver)" name="map_server" pkg="map_server" type="map_server" args="$(arg grid_map_path)" output="log" /> 
+    
+    <node if="$(arg pub_3d_map)" name="pub_3d_map" pkg="rtab" type="pub_3d_map.py" output="screen" >      
+        <param name="pcd_file_path_of_3d_pcss_map" value="$(arg pcd_file_path_of_3d_pcss_map)"/>
+        <param name="topic_of_3d_pcss_map" value="$(arg topic_of_3d_pcss_map)"/>
+        <param name="frame_id" value="map"/>
+    </node>
+
+    <node if="$(arg run_lidar_filter)"  name="scan_filter" pkg="lidar" type="lidar_filter.py" output="screen">
+        <param name="input_topic" value="/scan"/>
+        <param name="output_topic" value="/filtered_scan"/>
+        <param name="filter_distance" value="1.1"/>
+    </node>
+
+    <node if="$(arg run_matcher)"  pkg="laser_scan_matcher" type="laser_scan_matcher_node" name="laser_scan_matcher" output="log">
+        <env name="ROSCONSOLE_CONFIG_FILE" value="$(find rtab)/config/rosconsole.config"/>
+        <param name="fixed_frame" value="/odom"/>
+        <param name="base_frame" value="/base_link"/>
+        <param name="use_imu" value="false"/>
+        <param name="use_odom" value="false"/>
+        <param name="kf_dist_angle" value="0.1"/>
+        <param name="kf_dist_" value="0.05"/>
+        <param name="publish_pose_stamped" value="true"/>
+        <remap from="scan" to="/filtered_scan"/>
+    </node>
+
+
+    <node if="$(arg run_amcl)" pkg="amcl" type="amcl" name="amcl"  output="screen" >
+        <remap from="scan" to="/filtered_scan"/>
+        <remap from="map" to="/map"/>
+        <param name="transform_tolerance" value="0.1"/>
+        <param name="use_map_topic" value="true"/>
+
+        <param name="max_particles" value="10000"/>
+
+        <param name="initial_pose_x" value="$(arg initial_pose_x)"/> 
+        <param name="initial_pose_y" value="$(arg initial_pose_y)"/> 
+        <param name="initial_pose_a" value="$(arg initial_pose_a)"/> 
+
+        <param name="initial_pose_z" value="-1.066"/> 
+
+
+
+    
+        <param name="laser_likelihood_max_dist" value="0.5"/>
+        <param name="laser_max_beams" value="1200"/>
+        <param name="update_min_d" value="0.1"/>
+        <param name="update_min_a" value="0.3"/>
+        <param name="laser_z_hit" value="5.35"/>
+        <!-- <param name="laser_model_type" value="beam"/> -->
+    </node>
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_to_base_link" args="0.0 0 0.47 0 0 0 base_link camera_link" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="laser_to_base_link" args="-0.3 0 0.27 0 0 0 base_link laser_frame" />
+
+
+
+    <!-- 啟動move_base -->
+    <node if="$(arg run_move_base)" name="move_base" pkg="move_base" type="move_base" respawn="false" output="screen">
+        <rosparam file="$(find rtab)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+        <rosparam file="$(find rtab)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find rtab)/config/global_costmap_params.yaml" command="load" />
+        <rosparam file="$(find rtab)/config/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find rtab)/config/base_local_planner_params.yaml" command="load" />
+        <rosparam file="$(find rtab)/config/global_planner_params.yaml" command="load" />
+        <rosparam file="$(find rtab)/config/local_planner_params.yaml" command="load" />
+        <!-- <param name="base_global_planner" value="navfn/NavfnROS"/>
+        <param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS"/> -->
+    </node>
+
+
+</launch>

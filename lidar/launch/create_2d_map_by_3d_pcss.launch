@@ -1,0 +1,114 @@
+<launch>
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="pub_3d_map" default="true" />
+    <arg name="run_ground_detection_RANSAC" default="false" />
+    <arg name="run_ground_detection_normal_vector" default="true" />
+    <arg name="run_ground_detection_seg" default="false" />    
+    <arg name="run_map3d_to_map2d" default="true" />
+    <arg name="run_2dmap_save" default="true" />
+    <arg name="run_hector" default="false" /> 
+    <arg name="run_single_frame_image_and_pointcloud_saver" default="true" />
+
+    <!-- param -->
+    <!-- stair, elevator -->
+    <arg name="map" default="b1" />
+    <arg if="$(arg run_ground_detection_RANSAC)" name="ground_detection_method" default="RANSAC"/>
+    <arg if="$(arg run_ground_detection_seg)" name="ground_detection_method" default="seg"/>
+    <arg if="$(arg run_ground_detection_normal_vector)" name="ground_detection_method" default="normal_vector"/>
+
+
+    <arg name="topic_of_3d_pcss_map" default="/map_3d" />
+    <arg name="topic_of_obstacle_3d_map" default="/obstacle_3d_map" />
+    <arg name="grid_map_save_path" default="$(find rtab)/map/$(arg map)/" />
+    <arg name="pcd_file_path_of_3d_pcss_map" default="$(find rtab)/map/$(arg map)/$(arg map).pcd"/>
+    <!-- <arg name="pcd_file_path_of_3d_pcss_map" default="$(find rtab)/map/$(arg map)/b1_0316-123740.pcd"/> -->
+
+
+    <node if="$(arg run_single_frame_image_and_pointcloud_saver)" name="single_frame_image_and_pointcloud_saver" pkg="rtab" type="save_single_frame_image_and_pointcloud.py" output="screen" required="true" >
+        <param name="point_cloud_topic" value="$(arg topic_of_obstacle_3d_map)"/>
+        <param name="pcd_folder_path" value="$(find rtab)/map/$(arg map)/" />
+        <param name="save_images" value="false" />
+        <param name="filename_prefix" value="$(arg map)_$(arg ground_detection_method)" />        
+    </node>
+
+    <!-- node -->
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find lidar)/rviz/create_map.rviz" required="true" />
+
+
+    <node if="$(arg pub_3d_map)" name="pub_3d_map" pkg="rtab" type="pub_3d_map.py" output="log" >      
+        <param name="pcd_file_path_of_3d_pcss_map" value="$(arg pcd_file_path_of_3d_pcss_map)"/>
+        <param name="topic_of_3d_pcss_map" value="$(arg topic_of_3d_pcss_map)"/>
+        <param name="frame_id" value="map"/>
+    </node>
+
+    <node  if="$(arg run_ground_detection_normal_vector)" name="ground_detection_normal_vector" pkg="rtab" type="ground_detection_normal_vector.py" output="log">
+        <param name="topic_of_3d_pcss_map" value="$(arg topic_of_3d_pcss_map)" />
+        <param name="topic_of_ground" value="/topic_of_ground"  />
+        <param name="topic_obstacle_3d_map" value="$(arg topic_of_obstacle_3d_map)" />
+        <param name="normal_search_radius" value="0.4" />
+        <param name="angle_threshold" value="0.4" />
+        <param name="voxel_size" value="0.02" />
+    </node>
+
+    <node if="$(arg run_ground_detection_RANSAC)"  name="ground_detection_RANSAC" pkg="rtab" type="ground_detection_RANSAC.py" output="log">
+        <param name="topic_of_3d_pcss_map" value="$(arg topic_of_3d_pcss_map)" />
+        <param name="topic_obstacle_3d_map" value="$(arg topic_of_obstacle_3d_map)" />
+        <param name="topic_of_ground" value="/topic_of_ground" />        
+        <param name="voxel_grid_leaf_size" value="0.09"/>
+        <param name="max_distance" value="0.1"/>
+    </node>
+
+    <node if="$(arg run_ground_detection_seg)"  name="ground_detection_seg" pkg="rtab" type="ground_detection_seg_z.py" output="log">
+        <param name="filter_z_min" value="-2.8"/>
+        <param name="filter_z_max" value="3.5"/>
+        <param name="min_special_color_count" value="5"/>
+        <param name="topic_of_3d_pcss_map" value="$(arg topic_of_3d_pcss_map)"/>
+        <param name="topic_obstacle_3d_map" value="$(arg topic_of_obstacle_3d_map)"/>
+    </node>
+
+    <node if="$(arg run_map3d_to_map2d)" name="map3d_to_map2d" pkg="rtab" type="map3d_to_map2d.py" output="screen">
+        <param name="resolution" value="0.01" />
+        <param if="$(arg run_ground_detection_normal_vector)"  name="point_threshold" value="4" />
+        <param if="$(arg run_ground_detection_seg)"  name="point_threshold" value="2" />
+        <param name="subscribe_topic" value="$(arg topic_of_obstacle_3d_map)" />
+        <param name="publish_grid_topic" value="/grid_map" />
+    </node>
+
+    <node if="$(arg run_2dmap_save)" name="save_2d_grid_map" pkg="rtab" type="save_2d_grid_map.py" output="log" >
+        <param name="occupancy_grid_topic" value="/grid_map" />
+        <param name="map_path" value="$(arg grid_map_save_path)/$(arg map)_$(arg ground_detection_method).pgm"/>        
+    </node>
+
+    <node if="$(arg run_hector)" name="hector_mapping" pkg="hector_mapping" type="hector_mapping" output="log">
+        <!-- Parameters -->
+        <!-- <param name="map_resolution" value="0.05"/>
+        <param name="map_size" value="1024"/>
+        <param name="map_start_x" value="0.5"/>
+        <param name="map_start_y" value="0.5"/>
+        <param name="map_multi_res_levels" value="3"/>
+        <param name="update_factor_free" value="0.4"/>
+        <param name="update_factor_occupied" value="0.9"/>
+        <param name="laser_z_min_value" value="-1.0"/>
+        <param name="laser_z_max_value" value="1.0"/>
+        <param name="laser_min_dist" value="1.0"/> -->
+        <param name="tf_map_scanmatch_transform_frame_name" value="laser_frame"/>
+        <param name="pub_map_odom_transform" value="true"/>
+
+        <!-- <param name="base_frame" value="base_link" />
+        <param name="odom_frame" value="odom" /> -->
+        <!-- Topic remappings -->
+        <remap from="scan" to="/filtered_scan"/>
+        <!-- <remap from="syscommand" to="/syscommand"/> -->
+        <!-- <remap from="poseupdate" to="/poseupdate"/> -->
+        <!-- <remap from="slam_out_pose" to="/slam_out_pose"/> -->
+
+        <remap from="/map" to="/map_hector"/>
+        <!-- <remap from="/map_metadata" to="/custom_map_metadata"/>
+        <remap from="/map_updates" to="/custom_map_updates"/> -->
+        <!-- <remap from="/initialpose" to="/custom_initialpose"/>
+        <remap from="/scanmatch_odom" to="/custom_scanmatch_odom"/> -->
+
+    </node>
+
+</launch>
