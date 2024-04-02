@@ -1,0 +1,80 @@
+<launch>
+
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="run_tabmaprviz" default="false" />
+    <arg name="run_rscamera" default="true" />
+    <arg name="run_rtab" default="true" />
+    <arg name="run_single_frame_image_and_pointcloud_saver" default="true" />
+    <arg name="run_pcss" default="false" />
+    <arg name="run_seg" default="true" />
+    <arg name="localization" default="false" />    
+    <arg name="run_record" default="true" />
+    <arg name="model_path" default="$(find seg)/model/weight/DA_bnv2_it_900_b_4_01-04-06-32-52.pth" />
+    <param name="/use_sim_time" value="false"/>
+
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find rtab)/rviz/map.rviz" required="true" />
+
+    <!-- 啟動 RealSense 相機 -->
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch" if="$(arg run_rscamera)" >
+        <arg name="camera" value="camera" />
+        <arg name="serial_no" value="" /> 
+        <arg name="usb_port_id" value="" /> 
+        <arg name="device_type" value="" />  
+        <arg name="color_width" value="640" />
+        <arg name="color_height" value="480" /> 
+        <arg name="depth_width" value="640" /> 
+        <arg name="depth_height" value="480" />
+        <arg name="infra_width" value="640" /> 
+        <arg name="infra_height" value="480" /> 
+        <arg name="color_fps" value="15" /> 
+        <arg name="depth_fps" value="15" /> 
+        <arg name="infra_fps" value="15" />
+        <arg name="align_depth" value="true" />
+        <arg name="output" value="screen"/>
+  
+    </include>
+
+    <include file="$(find rtabmap_ros)/launch/rtabmap.launch" if="$(arg run_rtab)"  >
+        <arg name="localization"    value="$(arg localization)" />
+
+        <arg name="rtabmap_args" value="--delete_db_on_start" />
+        <arg name="depth_topic" value="/camera/aligned_depth_to_color/image_raw" />
+        <arg name="rgb_topic" value="/camera/color/image_raw" />
+        <arg name="camera_info_topic" value="/camera/color/camera_info" />
+        <arg name="approx_sync" value="false" />
+        <arg name="rtabmapviz" value="$(arg run_tabmaprviz)" />
+        <arg name="rviz" value="false"/>
+        <arg name="output" value="log"/>
+        <arg name="use_sim_time" value="false" />
+        <arg name="gen_cloud"               value="true"/>
+        <arg name="gen_cloud_decimation"    value="2"/>
+        <arg name="gen_cloud_voxel"         value="0.01"/>
+    </include> 
+
+    <node if="$(arg run_seg)" name="image_segmentation_node" pkg="seg" type="image_segmentation_node_adj.py" output="screen"  />
+        <param name="input_topic" value="/camera/color/image_raw" />
+        <param name="output_topic" value="segmented_image_real" />
+        <param name="model_path" value="$(arg model_path)" />
+
+    <node if="$(arg run_single_frame_image_and_pointcloud_saver)" name="single_frame_image_and_pointcloud_saver" pkg="rtab" type="save_single_frame_image_and_pointcloud.py" output="screen" required="true" >
+        <param name="point_cloud_topic" value="/scan_cloud"/>
+        <!-- <param name="image_topic" value="/camera/color/image_raw"/> -->
+        <!-- <param name="image_topic" value="/segmented_image_real"/> -->
+        <param name="image_topic" value="/camera/depth/image_rect_raw"/>
+
+        <param name="pcd_folder_path" value="$(find calibration)/raw_data/pcd" />
+        <param name="image_folder_path" value="$(find calibration)/raw_data/img" />
+        <param name="save_images" value="true" />
+        <param name="filename_prefix" value="frame" />        
+    </node>
+
+
+    <node if="$(arg run_pcss)" name="pcss" pkg="rtab" type="pcss.py" output="log" />
+
+    <node if="$(arg run_record)"  name="bag_recorder_service" pkg="rtab" type="bag_recorder_service.py" output="screen">
+        <param name="topics_to_record" value="all" />
+        <!-- <param name="topics_to_record" value="  /camera/color/image_raw /scan_cloud" /> -->
+        <param name="bag_file_directory" value="$(find rtab)/bag" />
+    </node>
+</launch>

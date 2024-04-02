@@ -1,0 +1,68 @@
+<launch>
+
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="run_bag" default="true" />
+    <arg name="run_rtab" default="false" />
+    <arg name="run_seg" default="true" />
+    <arg name="run_single_frame_image_and_pointcloud_saver" default="true" />
+    <arg name="run_pcss" default="true" />
+
+    <!-- param -->
+    <param name="/use_sim_time" value="true"/>
+    <arg name="map" default="elevator" />
+    <arg name="bag_storage_path" default="$(find rtab)/bag/$(arg map)/$(arg map).bag" />
+    <!-- <arg name="bag_storage_path" default="$(find rtab)/bag/b1/bag_2024-02-22-16-32-47.bag" /> -->
+    <!-- <arg name="model_path" default="$(find seg)/model/weight/DA_bnv2_it_900_b_4_01-04-06-32-52.pth" /> -->
+    <!-- <arg name="model_path" default="$(find seg)/model/weight/bnv2_ade20k.pth" /> -->
+    <arg name="model_path" default="$(find seg)/model/weight/DA_bnv2_it_900_b_4_01-04-06-32-52.pth" />
+
+    
+    <arg name="bag_delay" default="5"/> 
+
+    <!-- node -->
+    <node if="$(arg run_bag)"  pkg="rosbag" type="play" name="play_bag" args="--delay  $(arg bag_delay) -r 0.5 $(arg bag_storage_path)  " output="log"   />
+
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find rtab)/rviz/bag_map.rviz" required="true" />
+    
+    <include file="$(find rtabmap_ros)/launch/rtabmap.launch" if="$(arg run_rtab)"  >
+        <arg name="database_path"    default="$(find rtab)/map/rtabmap.db"/>
+        <arg name="rtabmap_args" value="--delete_db_on_start" />
+        <arg name="depth_topic" value="/camera/aligned_depth_to_color/image_raw" />
+        <arg name="rgb_topic" value="/camera/color/image_raw" />
+        <arg name="camera_info_topic" value="/camera/color/camera_info" />
+     
+        <arg name="approx_sync" value="true" />
+        <arg name="rviz" value="false"/>
+        <arg name="output" value="screen"/>
+        <arg name="use_sim_time" value="true" />
+    
+    </include>
+
+
+    <node if="$(arg run_seg)" name="image_segmentation_node" pkg="seg" type="image_segmentation_node_adj.py" output="screen"  />
+        <param name="input_topic" value="/camera/color/image_raw" />
+        <param name="output_topic" value="segmented_image" />
+        <param name="model_path" value="$(arg model_path)" />
+
+
+
+    <node if="$(arg run_single_frame_image_and_pointcloud_saver)" name="single_frame_image_and_pointcloud_saver" pkg="rtab" type="save_single_frame_image_and_pointcloud.py" output="screen" required="true" >
+        <param name="point_cloud_topic" value="/merged_cloud"/>
+        <param name="pcd_folder_path" value="$(find rtab)/map/$(arg map)/" />
+        <param name="save_images" value="false" />
+        <param name="filename_prefix" value="$(arg map)" />        
+    </node>
+
+    <node if="$(arg run_pcss)" name="pcss" pkg="rtab" type="pcss_syn_rgb.py" output="screen" />      
+    <node if="$(arg run_pcss)" name="merge" pkg="rtab" type="merge.py" output="log" />
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_to_base_link" args="0.0 0 -0.47 0 0 0 camera_link base_link" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="laser_to_base_link" args="0.3 0 0.27 0 0 0 base_link laser_frame" />
+    
+    <param name="robot_description" command="$(find xacro)/xacro /home/lab606/rtab/src/rtab/urdf/mapping_robot.urdf.xacro" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+
+
+</launch>

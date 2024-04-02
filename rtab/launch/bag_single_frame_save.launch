@@ -1,0 +1,54 @@
+<launch>
+
+    <!-- function -->
+    <arg name="run_rviz" default="true" />
+    <arg name="run_bag" default="true" />
+    <arg name="run_seg" default="true" />
+    <arg name="run_single_frame_image_and_pointcloud_saver" default="true" />
+    <arg name="run_pcss" default="true" />
+
+    <!-- param -->
+    <param name="/use_sim_time" value="true"/>
+    <arg name="map" default="elevator" />
+    <arg name="bag_storage_path" default="$(find rtab)/bag/$(arg map)/$(arg map).bag" />
+    <!-- <arg name="bag_storage_path" default="$(find rtab)/bag/elevator.bag" /> -->
+
+    
+    <arg name="bag_delay" default="1"/> 
+
+    <!-- node -->
+    <node if="$(arg run_bag)"  pkg="rosbag" type="play" name="play_bag" args="--delay  $(arg bag_delay) -r 0.5 $(arg bag_storage_path)  " output="log"   />
+
+
+
+    <node if="$(arg run_rviz)"  name="rviz" pkg="rviz" type="rviz" args="-d $(find rtab)/rviz/map.rviz" required="true" />
+
+
+    <node if="$(arg run_seg)" name="image_segmentation_node" pkg="seg" type="image_segmentation_node.py" output="screen"  />
+        <param name="input_topic" value="/camera/color/image_raw" />
+        <param name="output_topic" value="segmented_image" />
+        <param name="model_path" value="$(find seg)/model/weight/bnv2_train_indoor4_it_59500_b_4.pth" />
+
+
+
+    <node if="$(arg run_single_frame_image_and_pointcloud_saver)" name="single_frame_image_and_pointcloud_saver" pkg="rtab" type="save_single_frame_image_and_pointcloud.py" output="screen" required="true" >
+        <param name="point_cloud_topic" value="/merged_cloud"/>
+        <param name="image_topic" value="/camera/color/image_raw"/>
+        <param name="pcd_folder_path" value="$(find calibration)/raw_data/pcd" />
+        <param name="image_folder_path" value="$(find calibration)/raw_data/img" />
+        <param name="save_images" value="true" />
+        <param name="filename_prefix" value="frame" />        
+    </node>
+
+    <node if="$(arg run_pcss)" name="pcss" pkg="rtab" type="pcss_syn_rgb.py" output="screen" />      
+    <node if="$(arg run_pcss)" name="merge" pkg="rtab" type="merge.py" output="screen" />
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="camera_to_base_link" args="0.0 0 -0.47 0 0 0 camera_link base_link" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="laser_to_base_link" args="0.3 0 0.27 0 0 0 base_link laser_frame" />
+    
+    <param name="robot_description" command="$(find xacro)/xacro /home/lab606/rtab/src/rtab/urdf/mapping_robot.urdf.xacro" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+
+
+
+</launch>
